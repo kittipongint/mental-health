@@ -1,0 +1,26 @@
+# version: '3.8'
+
+services:
+  mental_service:
+    container_name: mental_service
+    build: 
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "8089:80"
+    environment:
+      ANTHROPIC_API_KEY:
+      ANTHROPIC_MODEL: claude-3-5-sonnet-20241022
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./app:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 80 --reload --reload-dir /app
+    # depends_on:
+    #   - db
+    #   - redis
+    restart: unless-stopped
+
+networks:
+  default:
+    name: nginx-proxy
+    external: true

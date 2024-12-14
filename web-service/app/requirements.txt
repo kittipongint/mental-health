@@ -6,3 +6,4 @@ sqlalchemy
 mysql-connector-python
 python-multipart
 python-dotenv
+demjson3
