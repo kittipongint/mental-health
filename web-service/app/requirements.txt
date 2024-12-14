@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+anthropic
+redis
+sqlalchemy
+mysql-connector-python
+python-multipart
+python-dotenv

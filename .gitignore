@@ -1,0 +1,4 @@
+web-service/app/__pycache__
+web-service/app/.env
+web-service/**/__pycache__
+.DS_Store

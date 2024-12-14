@@ -1,0 +1,18 @@
+# version: '3.8'
+
+services:
+  api:
+    build: 
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "8089:8000"
+    environment:
+      - ANTHROPIC_API_KEY=xxxxx
+    volumes:
+      - ./app:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app
+    # depends_on:
+    #   - db
+    #   - redis
+    restart: always
