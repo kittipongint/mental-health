@@ -255,20 +255,26 @@ def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db
     try:
         user = get_or_create_user(chat_message.username, db)
         llm_chat_message = ChatMessage(user_id=user.id, message=chat_message.message)
-        # TODO: get user id from database, create if not exist
 
-        # memory = get_user_memory(llm_chat_message.user_id)
-        # context = "\n\n".join([
-        #     f"{msg['role']}: {msg['content']}" 
-        #     for msg in memory
-        # ])
-        
-        # prompt = (
-        #     f"{context}\n\nHuman: {chat_message.message}\n\nAssistant:"
-        #     if context
-        #     else f"Human: {chat_message.message}\n\nAssistant:"
-        # )
+        memory = get_user_memory(llm_chat_message.user_id)
+        messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": llm_chat_message.message
+                        }
+                    ]
+                }]
 
+        for msg in memory:
+            if msg["role"].lower() == "user":
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+
+        print(messages)
         # response = anthropic.messages.create(
         #     model=config.ANTHROPIC_MODEL,
         #     max_tokens=1000,
@@ -289,37 +295,8 @@ def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db
             model=config.ANTHROPIC_MODEL,
             max_tokens=1000,
             temperature=.4,
-            system="You are a mental health counselor and family violence prevention advisor who provides only positive guidance. The responses will be given in a message format for counseling purposes and shortend as possible and in THAI. and include violence actioner in English like father, mother, child, wife, husband, etc. and include a risk assessment score on a scale of 1-10 indicating the likelihood of violence occurring, And give me the detail of score of indicator, and context summary by ignore harmfull word as `context`, all of that provide as parsable json format: {\"message\": \"\",\"context\":\"violenceActor\": \"\",\"riskScore\": _,\"scoreIndicators\": {\"severity\": _,\"frequency\": _,\"recentEscalation\": _,\"weaponUse\": _,\"threatToLife\": _}\n}",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": llm_chat_message.message
-                        }
-                    ]
-                }
-                # {
-                #     "role": "assistant",
-                #     "content": [
-                #         {
-                #             "type": "text",
-                #             "text": "ใครทำคุณบ้าง? ความรุนแรงที่ได้รับจากแต่ละคนหนักขนาดไหน วัดจากระดับ 1-10"
-                #         }
-                #     ]
-                # },
-                # # TODO: summary based on actioner and risk level
-                # {
-                #     "role": "user",
-                #     "content": [
-                #         {
-                #             "type": "text",
-                #             "text": "ฉันปลอดภัยแล้ว ขอบใจนะ"
-                #         }
-                #     ]
-                # }
-            ]
+            system="You are a mental health counselor and family violence prevention advisor who provides only positive guidance. The responses will be given in difference ways, if there seem like common and not badly situation, give the cheerful or feel good message, but if there are harmful and very violence in a message format for counseling purposes and shortend as possible and in THAI. and include violence actioner in English like father, mother, child, wife, husband, etc. and include a risk assessment score on a scale of 1-10 indicating the likelihood of violence occurring, And give me the detail of score of indicator, and context summary by ignore harmfull word as `context`, all of that provide as parsable json format: {\"message\": \"\",\"context\":\"violenceActor\": \"\",\"riskScore\": _,\"scoreIndicators\": {\"severity\": _,\"frequency\": _,\"recentEscalation\": _,\"weaponUse\": _,\"threatToLife\": _}\n}",
+            messages=messages
         )
         
         assistant_response = response.content[0].text
@@ -327,7 +304,7 @@ def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db
         # Save to database
         db_human_message = Conversation(
             user_id=llm_chat_message.user_id,
-            role="human",
+            role="user",
             content=llm_chat_message.message
         )
         db_assistant_message = Conversation(
@@ -339,8 +316,8 @@ def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db
         db.add(db_assistant_message)
         db.commit()
 
-        update_user_memory(llm_chat_message.user_id, "Human", llm_chat_message.message)
-        update_user_memory(llm_chat_message.user_id, "Assistant", assistant_response)
+        update_user_memory(llm_chat_message.user_id, "user", llm_chat_message.message)
+        update_user_memory(llm_chat_message.user_id, "assistant", assistant_response)
 
         # raw=ChatResponse(
         #         response=assistant_response,
