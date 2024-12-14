@@ -16,3 +16,8 @@ services:
     #   - db
     #   - redis
     restart: always
+
+networks:
+  default:
+    name: nginx-proxy
+    external: true

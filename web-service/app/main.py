@@ -29,17 +29,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Database Configuration
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_NAME = os.getenv("DB_NAME", "claude_db")
-
-DATABASE_URL = f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
 
 # Create SQLAlchemy engine
 engine = create_engine(
-    DATABASE_URL,
+    config.DATABASE_URL,
     pool_pre_ping=True,  # Enable automatic reconnection
     pool_recycle=3600,   # Recycle connections after 1 hour
 )
@@ -48,23 +41,16 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # Redis Configuration
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
-REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
-
 redis_client = redis.Redis(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    password=REDIS_PASSWORD,
+    host=config.REDIS_HOST,
+    port=config.REDIS_PORT,
+    password=config.REDIS_PASSWORD,
     decode_responses=True
 )
 
-# Initialize Anthropic client
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
-if not ANTHROPIC_API_KEY:
-    raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+redis_client.ping()
 
-anthropic = Anthropic(api_key=ANTHROPIC_API_KEY)
+anthropic = Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
 # Database Model
 class Conversation(Base):
@@ -85,8 +71,13 @@ def init_db():
         print(f"Error creating database tables: {e}")
 
 # Pydantic Models
+class LineChatMessage(BaseModel):
+    username: str
+    message: str
+    replyToken: str
+
 class ChatMessage(BaseModel):
-    user_id: str
+    user_id: int
     message: str
 
 class ChatResponse(BaseModel):
@@ -138,55 +129,65 @@ def update_user_memory(user_id: str, role: str, content: str):
         print(f"Error updating Redis memory: {e}")
 
 @app.post("/post", response_model=ChatResponse)
-def chat_with_claude(chat_message: ChatMessage, db: Session = Depends(get_db)):
+def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db)):
     try:
-        memory = get_user_memory(chat_message.user_id)
-        
-        context = "\n\n".join([
-            f"{msg['role']}: {msg['content']}" 
-            for msg in memory
-        ])
-        
-        prompt = (
-            f"{context}\n\nHuman: {chat_message.message}\n\nAssistant:"
-            if context
-            else f"Human: {chat_message.message}\n\nAssistant:"
-        )
+        llm_chat_message = ChatMessage(user_id=1, message=chat_message.message)
+        # TODO: get user id from database
 
-        response = anthropic.messages.create(
-            model="claude-3-opus-20240229",
-            max_tokens=1000,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
+        memory = get_user_memory(llm_chat_message.user_id)
+        
+        print(chat_message)
+        print(llm_chat_message)
+        print(memory)
 
-        assistant_response = response.content[0].text
+        # context = "\n\n".join([
+        #     f"{msg['role']}: {msg['content']}" 
+        #     for msg in memory
+        # ])
+        
+        # prompt = (
+        #     f"{context}\n\nHuman: {chat_message.message}\n\nAssistant:"
+        #     if context
+        #     else f"Human: {chat_message.message}\n\nAssistant:"
+        # )
+
+        # response = anthropic.messages.create(
+        #     model=config.ANTHROPIC_MODEL,
+        #     max_tokens=1000,
+        #     messages=[
+        #         {
+        #             "role": "user",
+        #             "content": prompt
+        #         }
+        #     ]
+        # )
+
+        # assistant_response = response.content[0].text
 
         # Save to database
         db_human_message = Conversation(
-            user_id=chat_message.user_id,
+            user_id=llm_chat_message.user_id,
             role="human",
-            content=chat_message.message
+            content=llm_chat_message.message
         )
         db_assistant_message = Conversation(
-            user_id=chat_message.user_id,
+            user_id=llm_chat_message.user_id,
             role="assistant",
-            content=assistant_response
+            content="xxxx"
         )
         db.add(db_human_message)
         db.add(db_assistant_message)
+
+        print(db_human_message)
+        print(db_assistant_message)
         db.commit()
 
-        update_user_memory(chat_message.user_id, "Human", chat_message.message)
-        update_user_memory(chat_message.user_id, "Assistant", assistant_response)
+        update_user_memory(llm_chat_message.user_id, "Human", llm_chat_message.message)
+        # update_user_memory(chat_message.user_id, "Assistant", assistant_response)
 
         return ChatResponse(
-            response=assistant_response,
-            conversation_history=get_user_memory(chat_message.user_id)
+            # response=assistant_response,
+            conversation_history=get_user_memory(llm_chat_message.user_id)
         )
 
     except Exception as e:
@@ -249,10 +250,10 @@ def redis_health_check():
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Redis connection failed: {str(e)}")
 
-# Initialize database on startup
-@app.on_event("startup")
-def startup_event():
-    init_db()
+# # Initialize database on startup
+# @app.on_event("startup")
+# def startup_event():
+#     init_db()
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
