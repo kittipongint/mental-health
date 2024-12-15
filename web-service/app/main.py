@@ -75,6 +75,18 @@ class User(Base):
     created_at = Column(DateTime, unique=False, index=False, default=datetime.utcnow)
     updated_at = Column(DateTime, unique=False, index=False)
 
+class Risks(Base):
+    __tablename__ = "risks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, unique=True, index=True)
+    context = Column(String, unique=True, index=True)
+    role = Column(String, unique=True, index=True)
+    role_user_id = Column(String, unique=True, index=True)
+    risk_level = Column(Integer, unique=False, index=True)
+    created_at = Column(DateTime, unique=False, index=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, unique=False, index=False)
+
 # Create tables
 def init_db():
     try:
@@ -337,6 +349,15 @@ def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db
         # responseObj['context']
         # responseObj['violenceActor']
         # responseObj['riskScore']
+
+        db_risks = Risks(
+            user_id=llm_chat_message.user_id,
+            role=responseObj['violenceActor'].lower(),
+            context=responseObj['context'],
+            risk_level=int(responseObj['riskScore']),
+        )
+        db.add(db_risks)
+        db.commit() 
 
         return LineChatResponse(
             username=chat_message.username,
