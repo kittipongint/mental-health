@@ -257,7 +257,16 @@ def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db
         llm_chat_message = ChatMessage(user_id=user.id, message=chat_message.message)
 
         memory = get_user_memory(llm_chat_message.user_id)
-        messages=[{
+        messages=[]
+
+        for msg in memory:
+            if msg["role"].lower() == "user":
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+
+        messages.append({
                     "role": "user",
                     "content": [
                         {
@@ -265,13 +274,6 @@ def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db
                             "text": llm_chat_message.message
                         }
                     ]
-                }]
-
-        for msg in memory:
-            if msg["role"].lower() == "user":
-                messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
                 })
 
         print(messages)
@@ -294,7 +296,7 @@ def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db
         response = anthropic.messages.create(
             model=config.ANTHROPIC_MODEL,
             max_tokens=1000,
-            temperature=.4,
+            temperature=.2,
             system="You are a mental health counselor and family violence prevention advisor who provides only positive guidance. The responses will be given in difference ways, if there seem like common and not badly situation, give the cheerful or feel good message, but if there are harmful and very violence in a message format for counseling purposes and shortend as possible and in THAI. and include violence actioner in English like father, mother, child, wife, husband, etc. and include a risk assessment score on a scale of 1-10 indicating the likelihood of violence occurring, And give me the detail of score of indicator, and context summary by ignore harmfull word as `context`, all of that provide as parsable json format: {\"message\": \"\",\"context\":\"violenceActor\": \"\",\"riskScore\": _,\"scoreIndicators\": {\"severity\": _,\"frequency\": _,\"recentEscalation\": _,\"weaponUse\": _,\"threatToLife\": _}\n}",
             messages=messages
         )
