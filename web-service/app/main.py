@@ -102,6 +102,11 @@ class LineChatResponse(BaseModel):
     replyMessage: str
     replyToken: str
 
+class ChatTest(BaseModel):
+    systemPrompt: str
+    message: str
+    username: str
+
 def parse_loose_json(json_str):
     try:
         return demjson3.decode(json_str)
@@ -342,6 +347,80 @@ def chat_with_claude(chat_message: LineChatMessage, db: Session = Depends(get_db
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/post-test", response_model=str)
+def chat_with_claude_test(chat_message: ChatTest, db: Session = Depends(get_db)):
+    try:
+        # user = get_or_create_user(chat_message.username, db)
+        # llm_chat_message = ChatMessage(user_id=user.id, message=chat_message.message)
+
+        # memory = get_user_memory(llm_chat_message.user_id)
+        messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": chat_message.message
+                        }
+                    ]
+                }]
+
+        # for msg in memory:
+        #     if msg["role"].lower() == "user":
+        #         messages.append({
+        #             "role": msg["role"],
+        #             "content": msg["content"]
+        #         })
+
+        # print(messages)
+        
+        # case: need help/advice
+        response = anthropic.messages.create(
+            model=config.ANTHROPIC_MODEL,
+            max_tokens=1000,
+            temperature=0.2,
+            system=chat_message.systemPrompt,
+            messages=messages
+        )
+        
+        assistant_response = response.content[0].text
+
+        # Save to database
+        # db_human_message = Conversation(
+        #     user_id=llm_chat_message.user_id,
+        #     role="user",
+        #     content=llm_chat_message.message
+        # )
+        # db_assistant_message = Conversation(
+        #     user_id=llm_chat_message.user_id,
+        #     role="assistant",
+        #     content=assistant_response
+        # )
+        # db.add(db_human_message)
+        # db.add(db_assistant_message)
+        # db.commit()
+
+        # update_user_memory(llm_chat_message.user_id, "user", llm_chat_message.message)
+        # update_user_memory(llm_chat_message.user_id, "assistant", assistant_response)
+
+        # raw=ChatResponse(
+        #         response=assistant_response,
+        #         conversation_history=get_user_memory(llm_chat_message.user_id)
+        #     )
+
+        # responseObj = clean_and_parse_json(assistant_response)
+        # TODO: Save into risks table
+        # responseObj['message']
+        # responseObj['context']
+        # responseObj['violenceActor']
+        # responseObj['riskScore']
+
+        return "systemPrompt:" +chat_message.systemPrompt  + "\n" +  "message:"+chat_message.message + "\n" + assistant_response
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/conversation/{username}")
 def get_conversation(username: str, db: Session = Depends(get_db)):    
